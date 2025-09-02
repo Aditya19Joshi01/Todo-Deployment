@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+env/
+.venv/
+venv/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# DB / local files
+todo_app.db
+*.sqlite3
+
+# logs and test
+*.log
+pytest_cache/
+.coverage
+
+# Docker
+docker-compose.override.yml
+*.env.local

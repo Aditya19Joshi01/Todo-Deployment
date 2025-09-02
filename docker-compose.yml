@@ -1,0 +1,39 @@
+services:
+  # web service: build the fastapi app image from the fastapi-todo-app folder
+  web:
+    build:
+      context: ./fastapi-todo-app
+      dockerfile: Dockerfile
+    container_name: fastapi-todo-app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/todo_db
+    # Avoid bind-mounting the entire project into the container in this compose file
+    # It can hide files copied during image build and cause unexpected behavior.
+    # For development you can re-add a more targeted mount.
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: todo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
