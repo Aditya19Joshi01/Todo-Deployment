@@ -7,12 +7,16 @@ WORKDIR /app
 # Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# ensure alembic and postgres driver are available in the image
+RUN pip install --no-cache-dir alembic psycopg2-binary
 
 # Copy source code
 COPY . .
+# make start script executable
+RUN chmod +x ./start.sh
 
 # Expose FastAPI default port
 EXPOSE 8000
 
 # Start the FastAPI app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
+ENTRYPOINT ["/bin/sh", "./start.sh"]

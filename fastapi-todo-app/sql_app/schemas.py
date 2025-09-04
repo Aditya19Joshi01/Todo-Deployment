@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class TodoBase(BaseModel):
@@ -15,5 +15,5 @@ class Todo(TodoBase):
     id: int
     done: bool = False
 
-    class Config:
-        orm_mode = True
+    # Pydantic v2: prefer model_config with from_attributes=True instead of orm_mode
+    model_config = ConfigDict(from_attributes=True)
