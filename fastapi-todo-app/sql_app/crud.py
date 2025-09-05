@@ -2,6 +2,8 @@ from sqlalchemy.orm import Session
 
 from . import models, schemas
 import logging
+from typing import Optional
+import auth
 
 logger = logging.getLogger("todo-app.crud")
 
@@ -46,3 +48,22 @@ def delete_todo(db: Session, todo_id: int):
     db.commit()
     logger.info("DB DELETE todo id=%s", todo_id)
     return db_todo
+
+
+# --- User CRUD ---
+def get_user(db: Session, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def get_user_by_username(db: Session, username: str):
+    return db.query(models.User).filter(models.User.username == username).first()
+
+
+def create_user(db: Session, username: str, password: str):
+    hashed = auth.hash_password(password)
+    db_user = models.User(username=username, hashed_password=hashed)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    logger.info("DB WRITE create_user id=%s username=%s", db_user.id, username)
+    return db_user

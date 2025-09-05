@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +7,9 @@ import json
 import logging
 
 from sql_app import crud, models, schemas
+import auth as _auth
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 from sql_app.database import SessionLocal, engine
 from redis_client import connect_redis, close_redis, get_redis
 
@@ -41,6 +45,19 @@ def get_db():
         db.close()
 
 
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = _auth.decode_access_token(token)
+        user_id = int(payload.get("sub"))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = crud.get_user(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+
 @app.on_event("startup")
 async def on_startup():
     # connect to redis at startup (compose service name 'redis')
@@ -56,6 +73,24 @@ async def on_startup():
 async def on_shutdown():
     await close_redis()
     logger.info("Shutdown: closed redis client (if any)")
+
+
+@app.post('/auth/register', response_model=schemas.User)
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    existing = crud.get_user_by_username(db, user.username)
+    if existing:
+        raise HTTPException(status_code=400, detail='Username already exists')
+    db_user = crud.create_user(db, user.username, user.password)
+    return db_user
+
+
+@app.post('/auth/token', response_model=schemas.Token)
+def login_for_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = crud.get_user_by_username(db, form_data.username)
+    if not user or not _auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail='Invalid credentials')
+    access_token = _auth.create_access_token(subject=user.id)
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/todos")
@@ -80,7 +115,7 @@ async def read_todos(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 
 @app.post("/todos")
-async def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db)):
+async def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     db_todo = crud.create_todo(db, todo)
     logger.info("DB WRITE create todo id=%s content=%s", getattr(db_todo, "id", None), todo.content)
     r = get_redis()
@@ -93,7 +128,7 @@ async def create_todo(todo: schemas.TodoCreate, db: Session = Depends(get_db)):
 
 
 @app.put("/todos/{todo_id}")
-async def update_todo(todo_id: int, done: bool, db: Session = Depends(get_db)):
+async def update_todo(todo_id: int, done: bool, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     db_todo = crud.update_todo(db, todo_id, done)
     if not db_todo:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -132,7 +167,7 @@ async def read_todo(todo_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/todos/{todo_id}")
-async def remove_todo(todo_id: int, db: Session = Depends(get_db)):
+async def remove_todo(todo_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     db_todo = crud.delete_todo(db, todo_id)
     if not db_todo:
         raise HTTPException(status_code=404, detail="Todo not found")
